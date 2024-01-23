@@ -1,0 +1,6 @@
+.streamlit/secrets.toml
+
+
+# Ignore the folder chat-app-venv
+__pycache__/
+chat-app-venv/

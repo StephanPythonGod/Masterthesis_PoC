@@ -1,2 +1,9 @@
 streamlit
 replicate
+spacy
+transformers 
+rank_bm25 
+sentence-transformers 
+tqdm
+pymongo
+openai
