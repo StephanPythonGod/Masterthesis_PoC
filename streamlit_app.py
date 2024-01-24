@@ -35,7 +35,7 @@ if "ensemble_retriever" not in st.session_state:
 
 # Context length selection
 if 'selected_context_length' not in st.session_state:
-    st.session_state['selected_context_length'] = 5
+    st.session_state['selected_context_length'] = 10
 
 if 'REPLICATE_API_TOKEN' in st.secrets:
     st.session_state['replicate_api'] = st.secrets['REPLICATE_API_TOKEN']
