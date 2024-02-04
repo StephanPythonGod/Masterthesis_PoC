@@ -5,6 +5,8 @@ import pandas as pd
 
 from openai import OpenAI
 import openai
+import requests
+
 import time
 
 
@@ -64,12 +66,6 @@ if "history" not in st.session_state:
         'reason_for_incorrectness': 'string'
     })
 
-    # #TODO: Debuggin only
-    # # Add dummy row to data
-    # row = {'turn': 1, 'question': 'What is the name of the book I am reading?', 'answer': 'The book you are reading is "1984" by George Orwell.', 'evidence': 'The book you are reading is "1984" by George Orwell.', 'cqu': 'What is the name of the book I am reading?', 'context_relevance': True, 'context_position': 1, 'faithfullness': True, 'answer_relevance': 1.0, 'reason_for_incorrectness':None}
-    # df_dictionary = pd.DataFrame([row])
-    # st.session_state.history = pd.concat([st.session_state.history, df_dictionary], ignore_index=True)
-
 if 'view' not in st.session_state:
     st.session_state['view'] = 'Settings'
 
@@ -96,7 +92,6 @@ if st.session_state.view != "Evaluation":
             st.title("⚙️ Settings")
             # Settings view
             if 'REPLICATE_API_TOKEN' in st.secrets:
-                st.success('API key already provided!', icon='✅')
                 st.session_state['replicate_api'] = st.secrets['REPLICATE_API_TOKEN']
             else:
                 if 'replicate_api' not in st.session_state:
@@ -108,12 +103,32 @@ if st.session_state.view != "Evaluation":
                     st.success('Proceed to entering your prompt message!', icon='👉')
             os.environ['REPLICATE_API_TOKEN'] = st.session_state['replicate_api']
 
+            if 'LEO_API_URL' in st.secrets:
+                st.session_state['leo_api_url'] = st.secrets['LEO_API_URL']
+            else:
+                if 'replicate_api' not in st.session_state:
+                    if "LEO_API_URL" in os.environ:
+                        st.session_state['leo_api_url'] = os.environ['LEO_API_URL']
+                    else:
+                        st.session_state['leo_api_url'] = ''
+                        st.session_state['leo_api_url'] = st.text_input('Enter Leo Hessian API URL:', value=st.session_state['leo_api_url'])
+
+            if "leo_api_url" in st.session_state and "replicate_api" in st.session_state:
+                st.success('You are ready to go! All APIs are provided.', icon='👍')
 
             st.subheader('Models and parameters')
 
             st.session_state['selected_model'] = st.selectbox('Choose a model', models, index=models.index(st.session_state['selected_model']), placeholder='Select a model')
 
-            st.session_state['selected_language'] = st.selectbox('Choose a language', languages, index=languages.index(st.session_state['selected_language']), placeholder='Select a language')
+            if st.session_state["selected_model"] == "Llama2-7B-chat":
+                available_languages = ["en"] 
+            elif st.session_state["selected_model"] == "leo-hessian-7B-chat":
+                available_languages = ["de"]
+            else:
+                available_languages = languages
+
+            st.session_state['selected_language'] = st.selectbox('Choose a language', available_languages, index=0, placeholder='Select a language')
+            # st.session_state['selected_language'] = st.selectbox('Choose a language', languages, index=languages.index(st.session_state["selected_language"]), placeholder='Select a language')
 
             if st.session_state['selected_language'] == 'de':
                 available_indices = indices[2:]
@@ -203,31 +218,39 @@ if st.session_state.view != "Evaluation":
     def generate_cqu_response():
         prompts = {
             'de': {
-                'system_prompt': "Als Assistent sollst du die aktuelle Frage unter Berücksichtigung eines mehrstufigen Informationsgesprächs dekontextualisieren und umformulieren. Bitte gib die umformulierte Frage nach 'Rewrite:' an. Hier sind einige Beispiele: \n\n 1. Beispiel:\nBenutzer: Wer ist mein Lieblingssänger?\nAssistent: Justin Bieber\nBenutzer: Wann wurde er geboren?\n\nRewrite: Wann wurde Justin Bieber geboren?\n\n2. Beispiel:\nBenutzer: Aus welcher Stadt in Deutschland kommt der Fußballclub KSC?\nAssistent: Karlsruhe\nBenutzer: Wie viele Menschen leben dort?\n\nRewrite: Wie viele Menschen leben in Karlsruhe?\n\n3. Beispiel:\nBenutzer: Wie heißt das Buch, das ich lese?\nAssistent: Das Buch, das Sie lesen, ist '1984' von George Orwell.\nBenutzer: Wer ist die Hauptfigur?\n\nRewrite: Wer ist die Hauptfigur in '1984' von George Orwell?\n\n4. Beispiel:\nBenutzer: Wie heißt der Regisseur des Films, den ich gestern gesehen habe?\nAssistent: Der Film, den Sie gestern gesehen haben, 'Inception', wurde von Christopher Nolan inszeniert.\nBenutzer: Welche anderen Filme hat er inszeniert?\n\nRewrite: Welche anderen Filme hat Christopher Nolan, der Regisseur von 'Inception', inszeniert?\n\n5. Beispiel:\nBenutzer: Wie heißt die Programmiersprache, die ich lerne?\nAssistent: Sie lernen Python.\nBenutzer: Wer hat es erstellt?\nAssistent: Python wurde von Guido van Rossum erstellt.\nBenutzer: Wann wurde es erstellt?\n\nRewrite: Wann wurde Python, die Programmiersprache, die von Guido van Rossum erstellt wurde, erstellt?",
-                'string_dialogue': "'Benutzer' bezieht sich auf Aussagen des Informationsuchenden in der Konversation. 'Assistent' auf Aussagen des Assistenten. Bitte formuliere die letzte Frage des Benutzers im Kontext um.",
-                'user_prompt': 'Benutzer',
-                'assistant_prompt': 'Assistent'
+                'GPT-3.5': {
+                    'system_prompt': "Als Assistent sollst du die aktuelle Frage unter Berücksichtigung eines mehrstufigen Informationsgesprächs dekontextualisieren und umformulieren. Bitte gib die umformulierte Frage nach 'Rewrite:' an. Hier sind einige Beispiele: \n\n 1. Beispiel:\nBenutzer: Wer ist mein Lieblingssänger?\nAssistent: Justin Bieber\nBenutzer: Wann wurde er geboren?\n\nRewrite: Wann wurde Justin Bieber geboren?\n\n2. Beispiel:\nBenutzer: Aus welcher Stadt in Deutschland kommt der Fußballclub KSC?\nAssistent: Karlsruhe\nBenutzer: Wie viele Menschen leben dort?\n\nRewrite: Wie viele Menschen leben in Karlsruhe?\n\n3. Beispiel:\nBenutzer: Wie heißt das Buch, das ich lese?\nAssistent: Das Buch, das Sie lesen, ist '1984' von George Orwell.\nBenutzer: Wer ist die Hauptfigur?\n\nRewrite: Wer ist die Hauptfigur in '1984' von George Orwell?\n\n4. Beispiel:\nBenutzer: Wie heißt der Regisseur des Films, den ich gestern gesehen habe?\nAssistent: Der Film, den Sie gestern gesehen haben, 'Inception', wurde von Christopher Nolan inszeniert.\nBenutzer: Welche anderen Filme hat er inszeniert?\n\nRewrite: Welche anderen Filme hat Christopher Nolan, der Regisseur von 'Inception', inszeniert?\n\n5. Beispiel:\nBenutzer: Wie heißt die Programmiersprache, die ich lerne?\nAssistent: Sie lernen Python.\nBenutzer: Wer hat es erstellt?\nAssistent: Python wurde von Guido van Rossum erstellt.\nBenutzer: Wann wurde es erstellt?\n\nRewrite: Wann wurde Python, die Programmiersprache, die von Guido van Rossum erstellt wurde, erstellt?",
+                    'string_dialogue': "'Benutzer' bezieht sich auf Aussagen des Informationsuchenden in der Konversation. 'Assistent' auf Aussagen des Assistenten. Bitte formuliere die letzte Frage des Benutzers im Kontext um.",
+                    'user_prompt': 'Benutzer',
+                    'assistant_prompt': 'Assistent'
+                },
+                'leo-hessian-7B-chat': {
+                    'system_prompt': "<|im_start|>system\nAls Assistent sollst du die aktuelle Frage unter Berücksichtigung eines mehrstufigen Informationsgesprächs dekontextualisieren und umformulieren. Bitte gib die umformulierte Frage nach 'Rewrite:' an. Hier sind einige Beispiele: \n\n 1. Beispiel:\nBenutzer: Wer ist mein Lieblingssänger?\nAssistent: Justin Bieber\nBenutzer: Wann wurde er geboren?\n\nRewrite: Wann wurde Justin Bieber geboren?\n\n2. Beispiel:\nBenutzer: Aus welcher Stadt in Deutschland kommt der Fußballclub KSC?\nAssistent: Karlsruhe\nBenutzer: Wie viele Menschen leben dort?\n\nRewrite: Wie viele Menschen leben in Karlsruhe?\n\n3. Beispiel:\nBenutzer: Wie heißt das Buch, das ich lese?\nAssistent: Das Buch, das Sie lesen, ist '1984' von George Orwell.\nBenutzer: Wer ist die Hauptfigur?\n\nRewrite: Wer ist die Hauptfigur in '1984' von George Orwell?\n\n4. Beispiel:\nBenutzer: Wie heißt der Regisseur des Films, den ich gestern gesehen habe?\nAssistent: Der Film, den Sie gestern gesehen haben, 'Inception', wurde von Christopher Nolan inszeniert.\nBenutzer: Welche anderen Filme hat er inszeniert?\n\nRewrite: Welche anderen Filme hat Christopher Nolan, der Regisseur von 'Inception', inszeniert?\n\n5. Beispiel:\nBenutzer: Wie heißt die Programmiersprache, die ich lerne?\nAssistent: Sie lernen Python.\nBenutzer: Wer hat es erstellt?\nAssistent: Python wurde von Guido van Rossum erstellt.\nBenutzer: Wann wurde es erstellt?\n\nRewrite: Wann wurde Python, die Programmiersprache, die von Guido van Rossum erstellt wurde, erstellt?<|im_end|>",
+                    'string_dialogue': "<|im_start|user\nBitte formuliere die letzte Frage des Benutzers im Kontext um.<|im_end|>\n<|im_start|>assistant\n",
+                    'user_prompt': 'Benutzer',
+                    'assistant_prompt': 'Assistent'
+                }
             },
             'en': {
-                # 'system_prompt': "As an assistant, you're to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\nUser: Who is my favorite Singer?\nAssistant: Justin Bieber\nUser: When was he born?\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\nUser: From which city in Germany is KSC the football club of?\nAssistant: Karlsruhe\nUser: How many people live in there?\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\nUser: What's the name of the book I'm reading?\nAssistant: The book you're reading is '1984' by George Orwell.\nUser: Who is the main character?\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\nUser: What's the name of the director of the movie I watched yesterday?\nAssistant: The movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\nUser: What other movies has he directed?\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\nUser: What's the name of the programming language I'm learning?\nAssistant: You're learning Python.\nUser: Who created it?\nAssistant: Python was created by Guido van Rossum.\nUser: When was it created?\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
-                'system_prompt': "As an assistant, you're tasked to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\n[INST] Who is my favorite singer? [/INST]\nJustin Bieber\n[INST] When was he born? [/INST]\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\n[INST] From which city in Germany is KSC the football club of? [/INST]\nKarlsruhe\n[INST] How many people live there? [/INST]\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\n[INST] What's the name of the book I'm reading? [/INST]\nThe book you're reading is '1984' by George Orwell.\n[INST] Who is the main character? [/INST]\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\n[INST] What's the name of the director of the movie I watched yesterday? [/INST]\nThe movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\n[INST] What other movies has he directed? [/INST]\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\n[INST] What's the name of the programming language I'm learning? [/INST]\nYou're learning Python.\n[INST] Who created it? [/INST]\nPython was created by Guido van Rossum.\n[INST] When was it created? [/INST]\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
-                # 'string_dialogue': "'User' refers to the information seeker's statements within the conversation. 'Assistant' to the assistant's statements. Please reformulate the user's last question in context.",
-                'string_dialogue': "[INST] Please reformulate the user's last question in context. [/INST]",
-                'user_prompt': 'User',
-                'assistant_prompt': 'Assistant'
+                'GPT-3.5': {
+                    'system_prompt': "As an assistant, you're tasked to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\n[INST] Who is my favorite singer? [/INST]\nJustin Bieber\n[INST] When was he born? [/INST]\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\n[INST] From which city in Germany is KSC the football club of? [/INST]\nKarlsruhe\n[INST] How many people live there? [/INST]\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\n[INST] What's the name of the book I'm reading? [/INST]\nThe book you're reading is '1984' by George Orwell.\n[INST] Who is the main character? [/INST]\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\n[INST] What's the name of the director of the movie I watched yesterday? [/INST]\nThe movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\n[INST] What other movies has he directed? [/INST]\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\n[INST] What's the name of the programming language I'm learning? [/INST]\nYou're learning Python.\n[INST] Who created it? [/INST]\nPython was created by Guido van Rossum.\n[INST] When was it created? [/INST]\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
+                    'string_dialogue': "[INST] Please reformulate the user's last question in context. [/INST]",
+                    'user_prompt': 'User',
+                    'assistant_prompt': 'Assistant'
+                },
+                'Llama2-7B-chat': {
+                    'system_prompt': "As an assistant, you're tasked to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\n[INST] Who is my favorite singer? [/INST]\nJustin Bieber\n[INST] When was he born? [/INST]\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\n[INST] From which city in Germany is KSC the football club of? [/INST]\nKarlsruhe\n[INST] How many people live there? [/INST]\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\n[INST] What's the name of the book I'm reading? [/INST]\nThe book you're reading is '1984' by George Orwell.\n[INST] Who is the main character? [/INST]\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\n[INST] What's the name of the director of the movie I watched yesterday? [/INST]\nThe movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\n[INST] What other movies has he directed? [/INST]\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\n[INST] What's the name of the programming language I'm learning? [/INST]\nYou're learning Python.\n[INST] Who created it? [/INST]\nPython was created by Guido van Rossum.\n[INST] When was it created? [/INST]\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
+                    'string_dialogue': "[INST] Please reformulate the user's last question in context. [/INST]",
+                    'user_prompt': 'User',
+                    'assistant_prompt': 'Assistant'
+                }
             }
         }
 
-        system_prompt = prompts[st.session_state.selected_language]['system_prompt']
+        system_prompt = prompts[st.session_state.selected_language][st.session_state.selected_model]['system_prompt']
         # string_dialogue += "\n\n"
         if st.session_state.selected_model == "Llama2-7B-chat":
             string_dialogue = ""
-
-            # for dict_message in st.session_state.messages[1:]:
-            #     if dict_message["role"] == "user":
-            #         string_dialogue += f"{prompts[st.session_state.selected_language]['user_prompt']}: " + dict_message["content"] + "\n"
-            #     else:
-            #         string_dialogue += f"{prompts[st.session_state.selected_language]['assistant_prompt']}: " + dict_message["content"] + "\n"
 
             for dict_message in st.session_state.messages[1:]:
                 if dict_message["role"] == "user":
@@ -235,7 +258,7 @@ if st.session_state.view != "Evaluation":
                 else:
                     string_dialogue += dict_message["content"] + "\n"
 
-            string_dialogue += prompts[st.session_state.selected_language]['string_dialogue']
+            string_dialogue += prompts[st.session_state.selected_language][st.session_state.selected_model]['string_dialogue']
             string_dialogue += "\n\nRewrite:" 
             output = ""
 
@@ -257,7 +280,8 @@ string_dialogue: {string_dialogue}""")
                     "system_prompt": system_prompt,
                     "max_new_tokens": 300,
                     "min_new_tokens": -1,
-                    "repetition_penalty": 1
+                    "repetition_penalty": 1,
+                    "do_sample": True
                 },
             )
             output = ''.join(output)
@@ -275,10 +299,10 @@ string_dialogue: {string_dialogue}""")
 
             try:
                 messages = [
-                    {"role": "system", "content": prompts[st.session_state.selected_language]['system_prompt'].replace("[INST]", "USER:").replace("[/INST]", "ASSISTANT:")},
+                    {"role": "system", "content": prompts[st.session_state.selected_language][st.session_state.selected_model]['system_prompt'].replace("[INST]", "USER:").replace("[/INST]", "ASSISTANT:")},
                 ]
                 messages.extend(st.session_state.messages[1:])
-                messages.append({"role": "user", "content": prompts[st.session_state.selected_language]['string_dialogue'].replace("[INST] ", "").replace(" [/INST]", "")})
+                messages.append({"role": "user", "content": prompts[st.session_state.selected_language][st.session_state.selected_model]['string_dialogue'].replace("[INST] ", "").replace(" [/INST]", "")})
 
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -299,7 +323,49 @@ string_dialogue: {string_dialogue}""")
                     # Handle the error in a way that suits your application
                 
             output = response.choices[0].message.content
+        
+        elif st.session_state.selected_model == "leo-hessian-7B-chat":
+            string_dialogue = ""
 
+            for dict_message in st.session_state.messages[1:]:
+                if dict_message["role"] == "user":
+                    string_dialogue += f"<|im_start|>user\n" + dict_message["content"] + "<|im_end|>\n"
+                else:
+                    string_dialogue += "<|im_start|>assistant\n" + dict_message["content"] + "<|im_end|>\n"
+
+            string_dialogue += prompts[st.session_state.selected_language][st.session_state.selected_model]['string_dialogue']
+            string_dialogue += "Rewrite:" 
+            output = ""
+            print(f"""
+CQU:
+system_prompt: {system_prompt}
+
+string_dialogue: {string_dialogue}""")
+
+
+            headers = {
+                "Accept" : "application/json",
+                "Content-Type": "application/json" 
+            }
+
+            def query(payload):
+                response = requests.post(st.session_state['leo_api_url'], headers=headers, json=payload)
+                return response.json()
+            
+            inputs = system_prompt + "\n" + string_dialogue
+
+            output = query({
+                "inputs": inputs,
+                "parameters": {
+                    "top_k": 60,
+                    "top_p": 0.95,
+                    "temperature": 0.9,
+                    "do_sample": True,
+                    "max_new_tokens": 300
+                }
+            })
+
+            output = output[0]["generated_text"]
 
         print(f"CQU output: {output}") 
         st.session_state.cqu = output.split(":")[-1]
@@ -308,23 +374,39 @@ string_dialogue: {string_dialogue}""")
     def generate_chat_response():
         prompts = {
             'de' : {
-                'system_prompt': "Sie sind ein hilfreicher Assistent, der einem Studenten bei Fragen zu seinen Prüfungsordnungen an der Universität Heidelberg hilft. Sie generieren eine Antwort auf der Grundlage mehrerer Kontexte, die nicht unbedingt die Antwort enthalten. Bitte generieren Sie eine Antwort oder sagen Sie 'Ich kann diese Frage nicht beantworten', wenn Sie auf der Grundlage des bereitgestellten Kontexts keine Antwort geben können.",
-                'dialoge': 'Dialog',
-                'context': 'Kontext',
-                'gap': 'Kontext zur Beantwortung der Frage:'
+                'GPT-3.5': {
+                    'system_prompt': "Sie sind ein hilfreicher Assistent, der einem Studenten bei Fragen zu seinen Prüfungsordnungen an der Universität Heidelberg hilft. Sie generieren eine Antwort auf der Grundlage mehrerer Kontexte, die nicht unbedingt die Antwort enthalten. Bitte generieren Sie eine Antwort oder sagen Sie 'Ich kann diese Frage nicht beantworten', wenn Sie auf der Grundlage des bereitgestellten Kontexts keine Antwort geben können.",
+                    'dialoge': 'Dialog',
+                    'context': 'Kontext',
+                    'gap': 'Kontext zur Beantwortung der Frage:'
+                },
+                'leo-hessian-7B-chat': {
+                    'system_prompt': "<|im_start|>system\nSie sind ein hilfreicher Assistent, der einem Studenten bei Fragen zu seinen Prüfungsordnungen an der Universität Heidelberg hilft. Sie generieren eine Antwort auf der Grundlage mehrerer Kontexte, die nicht unbedingt die Antwort enthalten. Bitte generieren Sie eine Antwort oder sagen Sie 'Ich kann diese Frage nicht beantworten', wenn Sie auf der Grundlage des bereitgestellten Kontexts keine Antwort geben können.<|im_end|>",
+                    'dialoge': 'Dialog',
+                    'context': 'Kontext',
+                    'gap': 'Kontext zur Beantwortung der Frage:'
+                },
             },
             'en':{
-                'system_prompt': "You are an assistant helping a student with examination regulations of the Heidelberg University. Generate a concise answer based on the provided contexts. If the answer isn't in the contexts, state 'I can't answer this question'. If there's ambiguity, ask clarifying questions.",
-                'dialoge': 'Dialogue',
-                'context': 'Context',
-                'gap': 'Context to answer the question:'
+                'GPT-3.5': {
+                    'system_prompt': "You are an assistant helping a student with examination regulations of the Heidelberg University. Generate a concise answer based on the provided contexts. If the answer isn't in the contexts, state 'I can't answer this question'. If there's ambiguity, ask clarifying questions.",
+                    'dialoge': 'Dialogue',
+                    'context': 'Context',
+                    'gap': 'Context to answer the question:'
+                },
+                'Llama2-7B-chat': {
+                    'system_prompt': "You are an assistant helping a student with examination regulations of the Heidelberg University. Generate a concise answer based on the provided contexts. If the answer isn't in the contexts, state 'I can't answer this question'. If there's ambiguity, ask clarifying questions.",
+                    'dialoge': 'Dialogue',
+                    'context': 'Context',
+                    'gap': 'Context to answer the question:'
+                }
             }
         }
 
-        system_prompt = prompts[st.session_state.selected_language]['system_prompt']
+        system_prompt = prompts[st.session_state.selected_language][st.session_state.selected_model]['system_prompt']
 
         if st.session_state.selected_model == "Llama2-7B-chat":
-            string_dialogue = f"{prompts[st.session_state.selected_language]['dialoge']}:\n\n"
+            string_dialogue = f"{prompts[st.session_state.selected_language][st.session_state.selected_model]['dialoge']}:\n\n"
 
             for dict_message in st.session_state.messages[1:]:
                 if dict_message["role"] == "user":
@@ -333,10 +415,10 @@ string_dialogue: {string_dialogue}""")
                     string_dialogue += dict_message["content"] + "\n"
             
             string_dialogue += "\n\n"
-            string_dialogue += f"{prompts[st.session_state.selected_language]['gap']}\n\n"
+            string_dialogue += f"{prompts[st.session_state.selected_language][st.session_state.selected_model]['gap']}\n\n"
 
             for index, passage in enumerate(st.session_state.evidence[0][:st.session_state.selected_context_length]):
-                string_dialogue += f"{index+1}. {prompts[st.session_state.selected_language]['context']}:\n"
+                string_dialogue += f"{index+1}. {prompts[st.session_state.selected_language][st.session_state.selected_model]['context']}:\n"
                 string_dialogue += passage + "\n\n"
             
             output = ""
@@ -374,15 +456,15 @@ string_dialogue: {string_dialogue}""")
 
             try:
 
-                string_dialogue = f"{prompts[st.session_state.selected_language]['gap']}\n\n"
+                string_dialogue = f"{prompts[st.session_state.selected_language][st.session_state.selected_model]['gap']}\n\n"
 
                 for index, passage in enumerate(st.session_state.evidence[0][:st.session_state.selected_context_length]):
-                    string_dialogue += f"{index+1}. {prompts[st.session_state.selected_language]['context']}:\n"
+                    string_dialogue += f"{index+1}. {prompts[st.session_state.selected_language][st.session_state.selected_model]['context']}:\n"
                     string_dialogue += passage + "\n\n"
             
 
                 messages = [
-                    {"role": "system", "content": prompts[st.session_state.selected_language]['system_prompt'].replace("[INST]", "USER:").replace("[/INST]", "ASSISTANT:")},
+                    {"role": "system", "content": prompts[st.session_state.selected_language][st.session_state.selected_model]['system_prompt'].replace("[INST]", "USER:").replace("[/INST]", "ASSISTANT:")},
                 ]
                 messages.extend(st.session_state.messages[1:])
                 messages.append({"role": "user", "content": string_dialogue})
@@ -406,6 +488,59 @@ string_dialogue: {string_dialogue}""")
                     # Handle the error in a way that suits your application
                 
             output = response.choices[0].message.content
+        
+        elif st.session_state.selected_model == "leo-hessian-7B-chat":
+            string_dialogue = ""
+
+            for dict_message in st.session_state.messages[1:]:
+                if dict_message["role"] == "user":
+                    string_dialogue += f"<|im_start|>user\n" + dict_message["content"] + "<|im_end|>\n"
+                else:
+                    string_dialogue += "<|im_start|>assistant\n" + dict_message["content"] + "<|im_end|>\n"
+
+            string_dialogue += f"<|im_start|>user\n{prompts[st.session_state.selected_language][st.session_state.selected_model]['gap']}\n\n"
+
+            for index, passage in enumerate(st.session_state.evidence[0][:st.session_state.selected_context_length]):
+                string_dialogue += f"{index+1}. {prompts[st.session_state.selected_language][st.session_state.selected_model]['context']}:\n"
+                string_dialogue += passage + "\n\n"
+            
+            string_dialogue += "<|im_end|>\n<|im_start|>assistant\n"
+
+            output = ""
+            print(f"""
+CHAT:
+system_prompt: {system_prompt}
+string_dialogue: {string_dialogue}""")
+
+            headers = {
+                "Accept" : "application/json",
+                "Content-Type": "application/json" 
+            }
+
+            def query(payload):
+                response = requests.post(st.session_state['leo_api_url'], headers=headers, json=payload)
+                return response.json()
+            
+            inputs = system_prompt + "\n" + string_dialogue
+
+            output = query({
+                # "inputs": string_dialogue,
+                "inputs": inputs,
+                "parameters": {
+                    "top_k": 10,
+                    "top_p": 0.6,
+                    "temperature": 0.4,
+                    "max_new_tokens": 300,
+                    # "repetition_penalty": 1.2,
+                    "do_sample": True,
+                    # "system_prompt": system_prompt,
+                }
+            })
+
+            print("Output: ", output)
+
+            output = output[0]["generated_text"]
+
 
         print(f"CHAT output: {output}")
         return output
