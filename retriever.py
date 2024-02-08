@@ -170,14 +170,18 @@ class BM25Retriever(BaseRetriever):
             raise ValueError("BM25Okapi index has not been created. Please call indexing() first.")
 
         tokenized_query = self.preprocess(query)
+
         doc_scores = self.index.get_scores(tokenized_query)
 
         # Sort documents by score and get the top k documents
         top_indices = sorted(range(len(doc_scores)), key=lambda i: doc_scores[i], reverse=True)[:k]
+        print(f"BM25 Top-Indizes retrieved ...")  # Debugging-Ausgabe
+
         top_documents = [self.text_corpus[i] for i in top_indices]
 
         if scores:
             top_scores = [doc_scores[i] for i in top_indices]
+            print(f"BM25 Top-Scores retrieved ...")  # Debugging-Ausgabe
             return top_documents, top_scores
         else:
             return top_documents
@@ -236,8 +240,12 @@ class CERetriever(BaseRetriever):
 
         query_passage_pairs = [(query, passage) for passage in self.text_corpus]
 
+        print("CE: Got query-passage pairs") 
+
         # Calculate cross encoder scores between the query and documents
         scores_ce = self.ce.predict(query_passage_pairs)
+
+        print("CE: Got scores")
 
         # Sort the pairs based on scores in descending order
         sorted_pairs = sorted(zip(query_passage_pairs, scores_ce), key=lambda x: x[1], reverse=True)
@@ -246,6 +254,8 @@ class CERetriever(BaseRetriever):
         sorted_documents, sorted_scores = zip(*sorted_pairs)
 
         sorted_passages = [pair[1] for pair in sorted_documents]
+
+        print("CE: Got sorted documents")
 
         # Extract the top-k documents and scores if requested
         if scores:
