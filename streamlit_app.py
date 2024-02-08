@@ -52,7 +52,7 @@ if "cqu" not in st.session_state.keys():
 
 if "history" not in st.session_state:
     # Create a dataframe with the columns: turn, question, answer, evidence, cqu
-    st.session_state.history = pd.DataFrame(columns=['turn', 'question', 'answer', 'evidence', 'cqu', 'context_relevance', 'context_position', 'faithfullness', 'answer_relevance', 'reason_for_incorrectness'])
+    st.session_state.history = pd.DataFrame(columns=['turn', 'question', 'answer', 'evidence', 'cqu', 'context_relevance', 'context_position', 'faithfullness', 'answer_relevance',"question_type", 'reason_for_incorrectness'])
     st.session_state.history = st.session_state.history.astype({
         'turn': 'int',
         'question': 'string',
@@ -63,7 +63,8 @@ if "history" not in st.session_state:
         'context_position': 'int',
         'faithfullness': 'bool',
         'answer_relevance': 'float',
-        'reason_for_incorrectness': 'string'
+        "question_type": "string",
+        'reason_for_incorrectness': 'object'
     })
 
 if 'view' not in st.session_state:
@@ -233,7 +234,7 @@ if st.session_state.view != "Evaluation":
             },
             'en': {
                 'GPT-3.5': {
-                    'system_prompt': "As an assistant, you're tasked to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\n[INST] Who is my favorite singer? [/INST]\nJustin Bieber\n[INST] When was he born? [/INST]\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\n[INST] From which city in Germany is KSC the football club of? [/INST]\nKarlsruhe\n[INST] How many people live there? [/INST]\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\n[INST] What's the name of the book I'm reading? [/INST]\nThe book you're reading is '1984' by George Orwell.\n[INST] Who is the main character? [/INST]\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\n[INST] What's the name of the director of the movie I watched yesterday? [/INST]\nThe movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\n[INST] What other movies has he directed? [/INST]\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\n[INST] What's the name of the programming language I'm learning? [/INST]\nYou're learning Python.\n[INST] Who created it? [/INST]\nPython was created by Guido van Rossum.\n[INST] When was it created? [/INST]\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
+                    'system_prompt': "As an assistant, you're tasked to decontextualize and reformulate the current question considering a multi-turn information-seeking dialogue. Please provide only the rewritten question after 'Rewrite:'. It will be used for passage retrieval. Here are some examples: \n\n 1. Example:\nUSER: Who is my favorite singer?\nASSISTANT:\nJustin Bieber\nUSER: When was he born?\nASSISTANT:\n\nRewrite: When was Justin Bieber born?\n\n2. Example:\nUSER: From which city in Germany is KSC the football club of?\nASSISTANT:\nKarlsruhe\nUSER: How many people live there?\nASSISTANT:\n\nRewrite: How many people live in Karlsruhe?\n\n3. Example:\nUSER: What's the name of the book I'm reading?\nASSISTANT:\nThe book you're reading is '1984' by George Orwell.\nUSER: Who is the main character?\nASSISTANT:\n\nRewrite: Who is the main character in '1984' by George Orwell?\n\n4. Example:\nUSER: What's the name of the director of the movie I watched yesterday?\nASSISTANT:\nThe movie you watched yesterday, 'Inception', was directed by Christopher Nolan.\nUSER: What other movies has he directed?\nASSISTANT:\n\nRewrite: What other movies has Christopher Nolan, the director of 'Inception', directed?\n\n5. Example:\nUSER: What's the name of the programming language I'm learning?\nASSISTANT:\nYou're learning Python.\nUSER: Who created it?\nASSISTANT:\nPython was created by Guido van Rossum.\nUSER: When was it created?\nASSISTANT:\n\nRewrite: When was Python, the programming language created by Guido van Rossum, created?",
                     'string_dialogue': "[INST] Please reformulate the user's last question in context. [/INST]",
                     'user_prompt': 'User',
                     'assistant_prompt': 'Assistant'
@@ -259,7 +260,7 @@ if st.session_state.view != "Evaluation":
                     string_dialogue += dict_message["content"] + "\n"
 
             string_dialogue += prompts[st.session_state.selected_language][st.session_state.selected_model]['string_dialogue']
-            string_dialogue += "\n\nRewrite:" 
+            # string_dialogue += "\nRewrite:" 
             output = ""
 
             print(f"""
@@ -280,7 +281,7 @@ string_dialogue: {string_dialogue}""")
                     "system_prompt": system_prompt,
                     "max_new_tokens": 300,
                     "min_new_tokens": -1,
-                    "repetition_penalty": 1,
+                    "repetition_penalty": 1.4,
                     "do_sample": True
                 },
             )
@@ -433,14 +434,14 @@ string_dialogue: {string_dialogue}""")
                 "meta/llama-2-7b-chat",
                 input={
                     "debug": False,
-                    "top_k": 5,
-                    "top_p": 0.4,
+                    "top_k": 40,
+                    "top_p": 0.8,
                     "prompt": string_dialogue,
                     "temperature": 0.5,  # Lower temperature
                     "system_prompt": system_prompt,
                     "max_new_tokens": 300,  # Lower max tokens
                     "min_new_tokens": -1,
-                    "repetition_penalty": 1.2  # Higher repetition penalty
+                    "repetition_penalty": 1.5  # Higher repetition penalty
                 },
             )
             output = ''.join(output)
@@ -649,17 +650,38 @@ Explanation of the columns:
                     "Other"
                 ],
             ),
+            # "reason_for_incorrectness" : st.multiselect(
+            #     "Reason for Incorrectness",
+            #     options=[
+            #         "Metadata Error",
+            #         "Wrong Crop",
+            #         "Correference Error",
+            #         "Not all Evidence Found",
+            #         "Correct Evidence Not Found",
+            #         "Overlapping Evidence",
+            #         "Hallucination",
+            #         "No Negative Rejection",
+            #         "Nonsense Answer",
+            #         "Wrong Answer",
+            #         "Other"
+            #     ],
+            #     help="Why is the answer incorrect?"
+            # )
             "reason_for_incorrectness": st.column_config.SelectboxColumn(
                 "Reason for Incorrectness",
                 help="Why is the answer incorrect?",
                 width="medium",
                 options=[
-                    "Hallucination",
-                    "Nonsense Answer",
-                    "No Negative Rejection",
+                    "Metadata Error",
+                    "Wrong Crop",
                     "Correference Error",
-                    "Wrong Answer",
+                    "Not all Evidence Found",
                     "Correct Evidence Not Found",
+                    "Overlapping Evidence",
+                    "Hallucination",
+                    "No Negative Rejection",
+                    "Nonsense Answer",
+                    "Wrong Answer",
                     "Other"
                 ],
             )
@@ -731,3 +753,4 @@ Explanation of the columns:
 
         with st.spinner("Uploading to MongoDB..."):
             collection.insert_one(upload_data)
+            st.write("Data successfully uploaded to MongoDB.")
