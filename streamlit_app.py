@@ -636,6 +636,19 @@ Explanation of the columns:
                 step=1,
                 required=True,
             ),
+            "question_type": st.column_config.SelectboxColumn(
+                "Question Type",
+                help="What type of question is it?",
+                width="medium",
+                options=[
+                    "Factoid",
+                    "List",
+                    "Yes/No",
+                    "Abstract",
+                    "Complex",
+                    "Other"
+                ],
+            ),
             "reason_for_incorrectness": st.column_config.SelectboxColumn(
                 "Reason for Incorrectness",
                 help="Why is the answer incorrect?",
