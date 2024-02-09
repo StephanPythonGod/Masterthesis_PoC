@@ -52,7 +52,7 @@ if "cqu" not in st.session_state.keys():
 
 if "history" not in st.session_state:
     # Create a dataframe with the columns: turn, question, answer, evidence, cqu
-    st.session_state.history = pd.DataFrame(columns=['turn', 'question', 'answer', 'evidence', 'cqu', 'context_relevance', 'context_position', 'faithfullness', 'answer_relevance',"question_type", 'reason_for_incorrectness'])
+    st.session_state.history = pd.DataFrame(columns=['turn', 'question', 'answer', 'evidence', 'cqu', 'context_relevance', 'context_position', 'faithfullness', 'answer_relevance',"question_type", 'reason_for_incorrectness', "multiple_reasons"])
     st.session_state.history = st.session_state.history.astype({
         'turn': 'int',
         'question': 'string',
@@ -64,7 +64,8 @@ if "history" not in st.session_state:
         'faithfullness': 'bool',
         'answer_relevance': 'float',
         "question_type": "string",
-        'reason_for_incorrectness': 'object'
+        'reason_for_incorrectness': 'string',
+        "multiple_reasons": "string"
     })
 
 if 'view' not in st.session_state:
@@ -597,7 +598,25 @@ Explanation of the columns:
 - **Reason for Incorrectness**: Why is the answer incorrect?
 """)
 
-
+    string_of_multiple_reasons = st.multiselect(
+        "Reason for Incorrectness",
+        options=[
+            "Metadata Error",
+            "Wrong Crop",
+            "Correference Error",
+            "Not all Evidence Found",
+            "Correct Evidence Not Found",
+            "Overlapping Evidence",
+            "Hallucination",
+            "No Negative Rejection",
+            "Nonsense Answer",
+            "Wrong Answer",
+            "Other"
+        ],
+        help="Why is the answer incorrect?"
+    )
+    # Write out a copy pastable string of the list of multiple reasons
+    st.code(','.join(string_of_multiple_reasons), language="python")
     # history = st.session_state.history
     # Display editable dataframe of history 
     edited_data = st.data_editor(
@@ -682,8 +701,13 @@ Explanation of the columns:
                     "No Negative Rejection",
                     "Nonsense Answer",
                     "Wrong Answer",
-                    "Other"
+                    "Other",
+                    "Multiple Reasons"
                 ],
+            ),
+            "multple_reasons": st.column_config.TextColumn(
+                "Multiple Reasons",
+                help="If there are multiple reasons for incorrectness, please list them here."
             )
         },
         disabled=["turn", "question", "answer", "evidence", "cqu"],
@@ -706,6 +730,14 @@ Explanation of the columns:
     if st.button("Submit"):
         # Divide the values in the upload_data history answer_relevance by 10
         upload_data["history"]["answer_relevance"] = upload_data["history"]["answer_relevance"] / 10
+
+        # iterate over every entry in the history, if reasons_for_incorrectness is "Multiple Reasons" and multiple_reasons is not empty, set reasons_for_incorrectness to multiple_reasons
+        for index, row in upload_data["history"].iterrows():
+            if row["reason_for_incorrectness"] == "Multiple Reasons" and row["multiple_reasons"] != "":
+                upload_data["history"].at[index, "reason_for_incorrectness"] = row["multiple_reasons"]
+        
+        # drop the multiple_reasons column
+        upload_data["history"].drop(columns=["multiple_reasons"], inplace=True)
 
         # Convert the upload_data history to a dictionary
         upload_data["history"] = upload_data["history"].to_dict(orient="records")
